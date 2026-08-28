@@ -3,10 +3,15 @@
 
 At batch end this is invoked by batch_solve.sh with the batch dir; for every
 task whose latest archived result is success (fix_verified_success == true), it
-copies logs/archive/<safe>/poc.bin + result.json into
-<out_dir>/<safe>/ and writes a MANIFEST.json summarizing the collection
-(task id, poc size/sha256, vul/fix exit codes).
+copies logs/archive/<safe>/poc.bin (+ result.json) into <out_dir>/<safe>/ and
+writes a MANIFEST.json summarizing the collection (task id, poc size/sha256,
+vul/fix exit codes).
+
+For an upload/clean build use --no-result: result.json is NOT copied (it can
+contain absolute paths / local machine info), and MANIFEST keeps no absolute
+paths — only task id / safe / poc size / sha256 / exit codes.
 """
+import argparse
 import hashlib
 import json
 import shutil
@@ -18,11 +23,18 @@ ARCHIVE = PROJECT / "logs" / "archive"
 
 
 def main(argv: list[str]) -> int:
-    out_dir = Path(argv[1]) if len(argv) > 1 else PROJECT / "logs" / "successful_pocs"
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("out_dir", nargs="?", help="destination dir (default logs/successful_pocs)")
+    parser.add_argument("--no-result", action="store_true",
+                        help="do not copy result.json (clean/upload build; no absolute paths)")
+    args = parser.parse_args(argv)
+
+    out_dir = Path(args.out_dir) if args.out_dir else PROJECT / "logs" / "successful_pocs"
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "kind": "successful_pocs_collection",
-        "source_archive": str(ARCHIVE),
+        "source_archive": "logs/archive",  # relative, never an absolute path
+        "clean": bool(args.no_result),
         "count": 0,
         "entries": [],
     }
@@ -50,7 +62,8 @@ def main(argv: list[str]) -> int:
         dst = out_dir / safe
         dst.mkdir(parents=True, exist_ok=True)
         shutil.copy2(poc, dst / "poc.bin")
-        shutil.copy2(rp, dst / "result.json")
+        if not args.no_result:
+            shutil.copy2(rp, dst / "result.json")
         manifest["entries"].append({
             "task_id": r.get("task_id"),
             "safe": safe,
@@ -58,16 +71,17 @@ def main(argv: list[str]) -> int:
             "poc_sha256": hashlib.sha256(poc.read_bytes()).hexdigest(),
             "vul_exit_code": ls.get("vul_exit_code"),
             "fix_exit_code": ls.get("fix_exit_code"),
-            "finalized_at": r.get("finalized_at", ""),
         })
 
     manifest["count"] = len(manifest["entries"])
     (out_dir / "MANIFEST.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-    print(f"collect_success_pocs: {manifest['count']} successful PoCs -> {out_dir}")
+    print(f"collect_success_pocs: {manifest['count']} successful PoCs -> {out_dir}"
+          f"{' [clean, no result.json]' if args.no_result else ''}")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main(sys.argv))
+    raise SystemExit(main(sys.argv[1:]))
+
