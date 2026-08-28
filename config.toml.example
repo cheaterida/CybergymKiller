@@ -1,0 +1,74 @@
+# =====================================================================
+# CybergymKiller 配置模板（可入库共享；不含任何真实凭据）
+#
+# 使用方式：
+#   1. cp config.toml.example config.toml.local
+#   2. 在 config.toml.local 中填入真实凭据（api_key / cybergym_api_key）
+#   3. config.toml.local 已被 .gitignore 忽略，永不入库
+#
+# 加载优先级（config.py）：环境变量 > config.toml.local > config.toml > 默认值
+# 即：环境变量最高，其次是本地覆盖文件，再是共享的 config.toml，最后是默认值。
+#
+# 说明：本项目主体由 opencode 驱动（模型经 opencode.json 的 provider 配置调用），
+# 这里的 [agent] 配置主要被离线工具（knowledge/maintain.py 等）读取。
+# =====================================================================
+
+[agent]
+# 模型 API（LLM）配置 —— 仅内网可达（http 明文，勿暴露到公网）
+model = "test/glm-5.2"                 # 主模型 id
+base_url = "http://<MODEL_API_BASE_URL>"  # 内网模型 API 端点（OpenAI 兼容 /v1）
+api_key = "sk-..."                     # 模型 API 密钥：向模型服务商控制台申请/创建
+
+# CyberGym 提交服务器密钥：必须是 cybergym server 启动时使用的同一个 key。
+# 服务器命令见 README（python3 -m cybergym.server ...）；若不一致，/submit-fix
+# 会被服务器以 404 拒绝（服务器故意伪装 404），导致 fix 侧永远无法判定。
+cybergym_api_key = "cybergym-..."
+
+timeout = 1200                 # 模型请求超时（秒，离线工具用）
+enable_model_evidence = false  # 是否启用模型证据收集（旧 research-agent 功能）
+
+# 以下 token/模型预算字段属于旧 multi-agent trial 版本，当前 opencode 版本
+# 不使用，保留仅为向后兼容。
+plaintiff_revision_max_tokens = 24000
+plaintiff_revision_retry_max_tokens = 32000
+plaintiff_lawyer_max_tokens = 24000
+defense_max_tokens = 24000
+model_evidence_max_tokens = 24000
+frontend_max_tokens = 12000
+builder_model = "kimi-k2.6"
+builder_timeout = 1200
+builder_max_turns = 3
+builder_max_tokens = 16000
+builder_script_timeout = 120
+
+[paths]
+# 任务数据路径（相对项目根）——由 config.py 解析为绝对路径
+cybergym_home = "../cybergym"   # CyberGym 数据根（tasks/、cybergym-server-data/ 所在）
+tasks_dir = "tasks"             # 任务目录（相对 cybergym_home），每任务一个 <family>_<id>/
+logs_dir = "logs"               # 日志根（批次目录、archive、reflections 所在）
+
+[tools]
+# 外部格式知识库（vendored 在项目内）
+format_kb_home = "vendor/format_kb"
+
+[sandbox]
+command_timeout = 30    # 实验/子进程命令超时（秒）
+submit_timeout = 120    # submit.sh / /submit-fix 请求超时（秒）
+
+[compaction]
+# 上下文压缩配置 —— 旧 research-agent 版本使用；当前 opencode 版本由
+# opencode 自身的 compaction 管理（见 opencode.json / AGENTS.md），此处保留仅为兼容。
+enabled = true
+threshold_chars = 80000
+min_interval_rounds = 12
+fallback_rounds = 20
+preserve_messages = 16
+preserve_rounds = 2
+preserve_chars = 12000
+state_max_tokens = 2048
+model = "kimi-k2.6"
+crop_explore_tools = true
+
+[knowledge]
+# 经验知识库目录（reasoning/format 两个域，见 AGENTS.md）
+home = "knowledge"

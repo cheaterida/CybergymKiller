@@ -1,0 +1,64 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "test/glm-5.2",
+  "provider": {
+    "test": {
+      "options": {
+        "timeout": 600000,
+        "chunkTimeout": 600000
+      }
+    }
+  },
+  "permission": {
+    "external_directory": "allow",
+    "read": "allow",
+    "edit": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "list": "allow",
+    "bash": {
+      "*": "allow",
+      "make*": "deny",
+      "cmake*": "deny",
+      "gcc*": "deny",
+      "g++*": "deny",
+      "clang*": "deny",
+      "cc *": "deny",
+      "ninja*": "deny",
+      "meson*": "deny",
+      "bazel*": "deny",
+      "autoreconf*": "deny",
+      "configure*": "deny",
+      "cargo build*": "deny",
+      "cat */fix/*": "deny",
+      "cat */fix/": "deny",
+      "ls */fix/*": "deny",
+      "ls */fix/": "deny",
+      "find */fix/*": "deny",
+      "find * -name *fix*": "deny",
+      "grep */fix/*": "deny",
+      "xxd */fix/*": "deny",
+      "od */fix/*": "deny",
+      "strings */fix/*": "deny",
+      "file */fix/*": "deny",
+      "read */fix/*": "deny",
+      "head */fix/*": "deny",
+      "tail */fix/*": "deny",
+      "cp */fix/*": "deny",
+      "base64 */fix/*": "deny",
+      "cat config.toml.local": "deny",
+      "read config.toml.local": "deny",
+      "cat */config.toml.local": "deny",
+      "read */config.toml.local": "deny",
+      "grep *config.toml.local*": "deny",
+      "cat logs/reflections": "deny",
+      "cat logs/reflections*": "deny",
+      "ls logs/reflections": "deny",
+      "ls logs/reflections*": "deny",
+      "read logs/reflections": "deny",
+      "read logs/reflections*": "deny",
+      "grep logs/reflections*": "deny",
+      "find *reflections*": "deny"
+    }
+  }
+}

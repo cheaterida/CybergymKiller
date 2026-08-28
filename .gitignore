@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+*.pyo
+
+# Runtime artifacts (never commit)
+logs/
+research/
+builder_codex.jsonl
+builder_codex.stderr.txt
+*.log
+*.jsonl
+!knowledge/reasoning/entries.jsonl
+!knowledge/format/entries.jsonl
+poc.bin
+poc.mng
+*.poc
+
+# Secrets / local config (api_key must never be committed)
+config.toml.local
+
+# Git / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Test/scratch
+*.tmp
+
+# Docs: only the architecture doc is maintained; test-phase docs stay local
+docs/*
+!docs/ARCHITECTURE.md
+
+# JS deps (opencode plugin toolchain)
+.opencode/node_modules/
