@@ -91,7 +91,8 @@ logs/
 ```bash
 # 网络应为隔离状态（公网不可达、内网模型可达）
 curl -s -m 3 https://www.google.com >/dev/null && echo "未隔离，先执行 sudo bash ~/netlock.sh" || echo "已隔离 OK"
-curl -s -m 5 http://<MODEL_API_BASE_URL>/v1/models >/dev/null && echo "内网模型可达" || echo "模型不可达！"
+# 内网模型可达性检查（模型 API 地址在 config.toml.local，勿提交真实地址）
+curl -s -m 5 "${MODEL_API_BASE:-http://127.0.0.1:8080}/v1/models" >/dev/null && echo "内网模型可达" || echo "模型不可达！"
 ```
 
 ### 终端 A（主终端，前台运行批量）
@@ -230,8 +231,9 @@ python3 opencode_bridge.py stats --root logs/archive
 
 ### 内网模型 API（必选依赖）
 
-- `opencode.json` 的 `provider.test` 指向内网 OpenAI 兼容端点
-  （`http://<MODEL_API_BASE_URL>`，模型 `test/glm-5.2`）。
+- `opencode.json` 的 `provider.test` 指向**内网 OpenAI 兼容模型端点**
+  （真实地址/密钥放在 `config.toml.local`，**禁止提交到仓库**；本仓库不包含
+  任何内网地址或模型名）。
 - `config.toml.local` 的 `api_key` 为对应模型服务密钥。
 - 批量在**网络隔离**下运行：仅内网模型 API 与 localhost:8666 可达，无公网。
 

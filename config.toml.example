@@ -16,7 +16,7 @@
 [agent]
 # 模型 API（LLM）配置 —— 仅内网可达（http 明文，勿暴露到公网）
 model = "test/glm-5.2"                 # 主模型 id
-base_url = "http://<MODEL_API_BASE_URL>"  # 内网模型 API 端点（OpenAI 兼容 /v1）
+base_url = "<MODEL_API_BASE_URL>"  # 内网模型 API 端点（OpenAI 兼容 /v1）——真实地址只填到 config.toml.local，禁止提交
 api_key = "sk-..."                     # 模型 API 密钥：向模型服务商控制台申请/创建
 
 # CyberGym 提交服务器密钥：必须是 cybergym server 启动时使用的同一个 key。

@@ -4,7 +4,7 @@
 
 [agent]
 model = "deepseek-v4-flash"
-base_url = "http://<MODEL_API_BASE_URL>"
+base_url = ""
 api_key = ""
 cybergym_api_key = ""
 timeout = 1200
