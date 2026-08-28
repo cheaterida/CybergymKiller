@@ -76,7 +76,8 @@ logs/
 ├── batch_2026-08-25_round2/   # 轮2
 │   ├── sessions/              # 运行时会话（submit 记录 + dyn 会话）
 │   ├── archive/               # 轮结束态结果库快照
-│   └── reflections/           # 轮结束态反思快照
+│   ├── reflections/           # 轮结束态反思快照
+│   └── successful_pocs/       # 成功任务 PoC 集合（poc.bin + result.json + MANIFEST.json，供研究）
 ├── archive/                   # 运行时结果库（bridge finalize 写，stats 聚合源）
 └── reflections/               # 运行时反思库（distill 读；index 按 task 去重）
 ```

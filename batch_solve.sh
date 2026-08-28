@@ -314,6 +314,12 @@ if [ -d logs/reflections ] && [ -n "$(ls -A logs/reflections 2>/dev/null)" ]; th
   echo "  -> snapshotted logs/reflections -> $LOG_ROOT_ABS/reflections/ ($(ls "$LOG_ROOT_ABS/reflections" | wc -l) entries)"
 fi
 
+# Collect successful-task PoCs into the batch dir for later research.
+echo ""
+echo "=== Collecting successful PoCs ==="
+timeout 300 python3 "$(dirname "$(readlink -f "$0")")/collect_success_pocs.py" \
+  "$LOG_ROOT_ABS/successful_pocs" 2>&1 | sed 's/^/  /'
+
 # Batch-end cleanup: release opencode DB space (drop automated sessions whose
 # transcripts are archived above, clear the bloat-causing event table, VACUUM).
 # Disable with --no-cleanup.
