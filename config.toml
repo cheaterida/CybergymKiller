@@ -1,52 +1,25 @@
-# CybergymAgent config
-# 非敏感配置：model/base_url/路径/压缩等，可入库共享。
-# 敏感值（api_key / cybergym_api_key）写在 config.toml.local（已在 .gitignore）。
+# CybergymKiller 非敏感配置（可入库共享）。
+# 敏感值（api_key / cybergym_api_key / 内网模型地址）写在 config.toml.local
+# （已被 .gitignore 忽略，永不入库）。加载优先级：
+#   环境变量 > config.toml.local > config.toml > 默认值
 
 [agent]
-model = "deepseek-v4-flash"
-base_url = ""
-api_key = ""
-cybergym_api_key = ""
-timeout = 1200
-enable_model_evidence = false
-model_evidence_model = "deepseek-v4-flash"
-plaintiff_revision_max_tokens = 24000
-plaintiff_revision_retry_max_tokens = 32000
-plaintiff_lawyer_max_tokens = 24000
-defense_max_tokens = 24000
-model_evidence_max_tokens = 24000
-frontend_max_tokens = 12000
-builder_model = "deepseek-v4-flash"
-builder_timeout = 1200
-builder_max_turns = 3
-builder_max_tokens = 16000
-builder_script_timeout = 120
+model = "test/glm-5.2"        # 主模型 id
+base_url = ""                 # 内网模型 API 端点（真实地址只在 config.toml.local）
+api_key = ""                  # 模型 API 密钥（只在 config.toml.local）
+cybergym_api_key = ""         # CyberGym 提交服务器密钥（只在 config.toml.local）
+timeout = 1200                # 模型请求超时（秒，离线工具用）
 
 [paths]
-cybergym_home = "../cybergym"
-tasks_dir = "tasks"
-logs_dir = "logs"
+cybergym_home = "../cybergym" # CyberGym 数据根（tasks/、cybergym-server-data/ 所在）
+tasks_dir = "tasks"           # 任务目录（相对 cybergym_home）
+logs_dir = "logs"             # 日志根（批次目录、archive、reflections 所在）
 
 [tools]
-format_kb_home = "vendor/format_kb"
+format_kb_home = "vendor/format_kb"  # 外部格式知识库（vendored）
 
 [sandbox]
-command_timeout = 30
-submit_timeout = 120
-
-[compaction]
-enabled = true
-threshold_chars = 80000
-min_interval_rounds = 12
-fallback_rounds = 20
-preserve_messages = 16
-preserve_rounds = 2
-preserve_chars = 12000
-state_max_tokens = 2048
-# 压缩用独立模型；实测 reasoning 系（deepseek-flash/pro）对短输出易空，
-# kimi-k2.6 稳定（配合 notes 离线拼装降级），故保留 kimi 而非主模型。
-model = "kimi-k2.6"
-crop_explore_tools = true
+submit_timeout = 120          # submit.sh / /submit-fix 请求超时（秒）
 
 [knowledge]
-home = "knowledge"
+home = "knowledge"            # 经验知识库目录（reasoning/format 两域）
