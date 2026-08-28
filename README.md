@@ -184,7 +184,7 @@ python3 opencode_bridge.py stats --root logs/archive
   C 卡死超时（最后活动 < 预算一半）、D 请求级异常（session.log 中请求超时 ≥3 次）。
   正常干满超时绝不重试。
 - **db 自动清理**：`opencode_cleanup.py` 批末/启动时删除自动 session + 清 event 表
-  + VACUUM，防止 opencode.db 膨胀（曾累积到 9.5GB）。
+  + VACUUM，防止 opencode.db 膨胀。
 
 ## 配置
 
@@ -193,8 +193,8 @@ python3 opencode_bridge.py stats --root logs/archive
 - `config.toml.example`：**配置模板**（git 提交，含全部参数说明）。复制为
   `config.toml.local` 并填入真实凭据。
 - `config.toml`：非敏感默认配置（路径 / format_kb / knowledge / 超时等），可入库。
-- `config.toml.local`：**敏感凭据**（api_key / cybergym_api_key），已被 .gitignore
-  忽略，永不入库。`api_key` 为内网模型 API 密钥（向模型服务商申请）；
+- `config.toml.local`：**敏感凭据**（api_key / cybergym_api_key），
+  `api_key` 为内网模型 API 密钥（向模型服务商申请）；
   `cybergym_api_key` 必须与 cybergym server 启动时所用 key 一致，否则 /submit-fix
   被服务器 404 拒绝（故意伪装），fix 侧无法判定。加载优先级：
   环境变量 > config.toml.local > config.toml > 默认值。
@@ -208,8 +208,7 @@ python3 opencode_bridge.py stats --root logs/archive
 ### CyberGym（必选依赖）
 
 - **位置**：`~/cybergym`。官方项目：
-  https://cybergym.io（[arXiv 2506.02548](https://arxiv.org/abs/2506.02548)，
-  [HuggingFace](https://huggingface.co/datasets/sunblaze-ucb/cybergym)）。
+  https://github.com/sunblaze-ucb/cybergym ( [HuggingFace](https://huggingface.co/datasets/sunblaze-ucb/cybergym) )。
 - **提供**：任务数据 `tasks/`（ `arvo_*` / `oss-fuzz_*` 任务目录（需要运行官方脚本或自建脚本进行任务构建），
   `tasks.json` 中预测的 50 个任务即来源于此）、漏洞/修复二进制
   `cybergym-server-data/<family>/<id>/{vul,fix}/`、提交判定服务器。
@@ -239,11 +238,12 @@ python3 opencode_bridge.py stats --root logs/archive
   依赖 `fonttools[woff]`）。Agent-oriented 格式匹配/结构/验证/构造。
   由 `cybergym_format_*` 工具调用。
 - 其格式结构信息参考了 **010 Editor 官方开源二进制格式信息**
-  （[010 Editor 模板库](https://github.com/SweetScape/010EditorTemplates)，
+  （[010 Editor 模板库](https://www.sweetscape.com/010editor/repository/templates/)，
   社区/官方维护的 `.bt` 格式模板），整理为可供 agent 检索与构造的格式蓝图。
 
 ### opencode（驱动 CLI）
-
+- 官方项目：
+  https://opencode.ai/ 请安装linux端的CLI版本。
 - 使用 `opencode run`（headless）驱动每任务会话；自定义工具位于
   `.opencode/tools/*.ts`（依赖 `@opencode-ai/plugin`）。
 
