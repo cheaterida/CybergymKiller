@@ -240,8 +240,9 @@ python3 opencode_bridge.py stats --root logs/archive
 - `vendor/format_kb/`：`format-knowledge-base`（121 格式，MIT，
   依赖 `fonttools[woff]`）。Agent-oriented 格式匹配/结构/验证/构造。
   由 `cybergym_format_*` 工具调用。
-- `~/Binary-Template-Repository`（可选参考）：文件格式模板库
-  （Archive/Audio/Image/... 分类），与 format_kb 互补，供人工/模型构造参考。
+- 其格式结构信息参考了 **010 Editor 官方开源二进制格式信息**
+  （[010 Editor 模板库](https://github.com/SweetScape/010EditorTemplates)，
+  社区/官方维护的 `.bt` 格式模板），整理为可供 agent 检索与构造的格式蓝图。
 
 ### opencode（驱动 CLI）
 
