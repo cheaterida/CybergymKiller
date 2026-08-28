@@ -5,8 +5,8 @@
 验证 → 提交"的闭环；批量求解后自动沉淀反思（reflection）并经人工蒸馏（distill）
 进入知识库，形成跨任务的学习闭环。
 
-> 过往版本（multi-agent trial / research-agent 时代）源码与日志已隔离打包，
-> 见 [Legacy 说明](#legacy-历史版本)。
+> 本仓库仅含当前 opencode 主导版本；本项目依赖的关联项目见文末
+> [关联项目与依赖](#关联项目与依赖)。
 
 ## 架构
 
@@ -205,10 +205,45 @@ python3 opencode_bridge.py stats --root logs/archive
 - `AGENTS.md`：给模型的任务判据、工具说明、工作区规则、Integrity 规则、内网告知
   与两条温和认知引导。
 
-## Legacy 历史版本
+## 关联项目与依赖
 
-multi-agent trial（`trial/`、`cli.py`、`batch.py`、`investigation.py` 等）与
-research-agent 时代的旧批次日志已从本项目根隔离，备份在项目外的
-`~/CybergymKiller_legacy_backup/`（含 `legacy_src/` 自包含源码树、`legacy_docs/`
-旧文档、`legacy_logs/` 旧批次摘要），并打包为
-`~/CybergymKiller_legacy_backup.tar.gz`。本项目根仅保留当前 opencode 主导版本。
+本项目运行依赖以下外部项目/服务，需先就位：
+
+### CyberGym（必选依赖）
+
+- **位置**：`~/cybergym`（约 11G）。官方项目：
+  https://cybergym.io（[arXiv 2506.02548](https://arxiv.org/abs/2506.02548)，
+  [HuggingFace](https://huggingface.co/datasets/sunblaze-ucb/cybergym)）。
+- **提供**：任务数据 `tasks/`（63 个 `arvo_*` / `oss-fuzz_*` 任务目录，
+  `tasks.json` 中的 50 个任务即来源于此）、漏洞/修复二进制
+  `cybergym-server-data/<family>/<id>/{vul,fix}/`、提交判定服务器。
+- **服务器**（必须运行，否则 `cybergym_submit` 全部失败）：
+  ```bash
+  cd ~/cybergym && python3 -m cybergym.server --host 0.0.0.0 --port 8666 \
+    --mask_map_path ~/cybergym/mask_map.json \
+    --log_dir ~/cybergym/server_poc --db_path ~/cybergym/server_poc/poc.db \
+    --binary_dir ~/cybergym/cybergym-server-data
+  ```
+  验证：`curl localhost:8666`（返回 404 属正常，根路径无路由）。
+  `config.toml.local` 的 `cybergym_api_key` 必须与服务器所用 key 一致，
+  否则 `/submit-fix` 被 404 拒绝，fix 侧无法判定。
+
+### 内网模型 API（必选依赖）
+
+- `opencode.json` 的 `provider.test` 指向内网 OpenAI 兼容端点
+  （`http://<MODEL_API_BASE_URL>`，模型 `test/glm-5.2`）。
+- `config.toml.local` 的 `api_key` 为对应模型服务密钥。
+- 批量在**网络隔离**下运行：仅内网模型 API 与 localhost:8666 可达，无公网。
+
+### 格式知识库（vendored，随项目分发）
+
+- `vendor/format_kb/`：`format-knowledge-base`（121 格式，MIT，
+  依赖 `fonttools[woff]`）。Agent-oriented 格式匹配/结构/验证/构造。
+  由 `cybergym_format_*` 工具调用。
+- `~/Binary-Template-Repository`（可选参考）：文件格式模板库
+  （Archive/Audio/Image/... 分类），与 format_kb 互补，供人工/模型构造参考。
+
+### opencode（驱动 CLI）
+
+- 使用 `opencode run`（headless）驱动每任务会话；自定义工具位于
+  `.opencode/tools/*.ts`（依赖 `@opencode-ai/plugin`）。
