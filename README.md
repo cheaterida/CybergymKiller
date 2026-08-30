@@ -252,3 +252,7 @@ python3 opencode_bridge.py stats --root logs/archive
 ### GLM5.2:
 
 - "model": "glm-5.2","success_rate": 48/50=0.96;
+
+### DeepSeek-v4-flash:
+
+- "model": "deepseek-v4-flash","success_rate": 47/50=0.94;
