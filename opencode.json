@@ -60,5 +60,10 @@
       "grep logs/reflections*": "deny",
       "find *reflections*": "deny"
     }
+  },
+  "compaction": {
+    "auto": true,
+    "preserve_recent_tokens": 40000,
+    "reserved": 8000
   }
 }
