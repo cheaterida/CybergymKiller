@@ -23,6 +23,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -439,6 +440,130 @@ def cmd_dyn_cleanup_all(args: argparse.Namespace) -> None:
     print(json.dumps(cleanup_all(), ensure_ascii=False, indent=2))
 
 
+_SAFE_GDBCMD_CHARS = re.compile(r"^[A-Za-z0-9_\-./:+=,@%\[\]{}() ]+$")
+
+
+def cmd_gdb(args: argparse.Namespace) -> None:
+    """Run a batch gdb session inside a dynamic-whole container (Tier-1).
+
+    Writes a gdb command script to /work/gdbcmds.txt (base64 to avoid shell
+    quoting), then runs /opt/gdb/bin/gdb-<ver> -batch -x script
+    --args <program> <args...>. Non-interactive settings + sanitizer env are
+    auto-prepended so an ASan crash stops at the real report; by default a
+    crash snapshot (run -> bt 40 / info registers / x/24gx $rsp / info frame)
+    is appended. The model iterates by editing `script` and re-invoking.
+
+    Tier-2 (persistent MI console) is reserved for a future gdb_mi_* namespace.
+    """
+    import base64
+    import shlex
+    from whole_session import exec_in_session
+
+    session_id = str(args.session_id or "").strip()
+    program = str(args.program or "").strip()
+    gscript = str(args.script or "").strip()
+    gargs = str(args.args or "").strip()
+    purpose = str(args.purpose or "").strip()
+
+    if not session_id:
+        _fail("gdb: session_id is required")
+    if not program:
+        _fail("gdb: --program (target binary path inside the container, e.g. /out/foo_fuzzer) is required")
+    if not _SAFE_GDBCMD_CHARS.match(program):
+        _fail("gdb: --program contains unsupported characters")
+    if gargs and not _SAFE_GDBCMD_CHARS.match(gargs):
+        _fail("gdb: --args contains unsupported characters (alnum / . - _ : = , @ % space only)")
+
+    # Probe which static gdb versions are mounted.
+    avail = exec_in_session(session_id, "ls /opt/gdb/bin/ 2>/dev/null || echo __NO_GDB__",
+                            purpose=f"gdb:probe {purpose}".strip())
+    stdout = avail.get("stdout") or ""
+    if "__NO_GDB__" in stdout:
+        _fail("gdb: no static gdb mounted in this container (run tools/gdb/fetch.sh, then dyn_start again)")
+    have13 = "gdb-13" in stdout
+    have8 = "gdb-8.3" in stdout
+    ver_sel = str(args.gdb_version or "auto").strip()
+    candidates: list[str] = []
+    if ver_sel == "auto":
+        # Prefer gdb-13 (full DWARF5/clang18 support); fall back to the
+        # fully-static gdb-8.3 when this image lacks gdb-13's shared deps.
+        if have13:
+            candidates.append("/opt/gdb/bin/gdb-13")
+        if have8:
+            candidates.append("/opt/gdb/bin/gdb-8.3")
+    elif ver_sel in ("13", "13.x"):
+        if not have13:
+            _fail(f"gdb: gdb-13 not mounted (available: {' '.join(stdout.split())})")
+        candidates.append("/opt/gdb/bin/gdb-13")
+    elif ver_sel in ("8", "8.3", "8.x"):
+        if not have8:
+            _fail(f"gdb: gdb-8.3 not mounted (available: {' '.join(stdout.split())})")
+        candidates.append("/opt/gdb/bin/gdb-8.3")
+    else:
+        _fail(f"gdb: unknown --gdb-version '{ver_sel}' (auto|13|8)")
+    if not candidates:
+        _fail("gdb: no static gdb mounted in this container (run tools/gdb/fetch.sh, then dyn_start again)")
+
+    # Build the gdb script.
+    lines = ["set pagination off", "set confirm off"]
+    # ASan under gdb: abort on report so `bt` shows the real crash call chain;
+    # UBSan: halt + stack so the bounds site is visible.
+    lines.append("set environment ASAN_OPTIONS=abort_on_error=1:detect_leaks=0")
+    lines.append("set environment UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1")
+    if gscript:
+        lines.append(gscript)
+    has_run = bool(re.search(r"(^|\n)\s*(run|start)(\s|$)", gscript))
+    snapshot = (not args.no_snapshot) and (not has_run)
+    if not has_run:
+        lines.append("run")  # target args come from --args below
+    if snapshot:
+        lines.append('printf "\\n========== GDB-SNAPSHOT ==========\\n"')
+        lines.append("bt 40")
+        lines.append("info registers")
+        lines.append("x/24gx $rsp")
+        lines.append("info frame")
+    lines.append("quit")
+    script_text = "\n".join(lines) + "\n"
+
+    # 1) Write the script into the container (base64; no shell quoting issues).
+    b64 = base64.b64encode(script_text.encode()).decode()
+    w = exec_in_session(session_id,
+                        f"echo {b64} | base64 -d > /work/gdbcmds.txt && wc -c /work/gdbcmds.txt",
+                        purpose=f"gdb:write-script {purpose}".strip())
+    if w.get("exit_code") != 0:
+        _fail(f"gdb: failed to write script into container: {str(w.get('stderr', ''))[:300]}")
+
+    # 2) Run gdb -batch. --args carries program+args so the script's bare
+    #    `run` picks them up (no shell parsing of the target's argv).
+    timeout = max(1, min(600, int(args.timeout or 120)))
+    res = None
+    gdb_bin = ""
+    for gdb_bin in candidates:
+        full = f"timeout={timeout} {shlex.quote(gdb_bin)} -batch -x /work/gdbcmds.txt --args {shlex.quote(program)}"
+        if gargs:
+            full += " " + gargs
+        res = exec_in_session(session_id, full, purpose=f"gdb:run {purpose}".strip())
+        err = str(res.get("stderr") or "") + str(res.get("stdout") or "")
+        if "cannot open shared object" in err or "error while loading shared libraries" in err:
+            continue  # this gdb build lacks shared deps in this image -> next version
+        break
+    fell_back = gdb_bin != candidates[0]
+
+    print(json.dumps({
+        "ok": True,
+        "session_id": session_id,
+        "gdb_bin": gdb_bin,
+        "fell_back": fell_back,
+        "snapshot": snapshot,
+        "exit_code": res.get("exit_code") if res else None,
+        "timed_out": res.get("timed_out") if res else None,
+        "elapsed_seconds": res.get("elapsed_seconds") if res else None,
+        "stdout": res.get("stdout", "") if res else "",
+        "stderr": res.get("stderr", "") if res else "",
+        "note": "exit_code is the debuggee's exit status (or gdb's). If the target crashed, 'GDB-SNAPSHOT' marks the bt/registers/memory dump of the crash site. fell_back=true means gdb-13's shared libs were missing in this image, so the fully-static gdb-8.3 was used.",
+    }, ensure_ascii=False, indent=2))
+
+
 def cmd_format_identify(args: argparse.Namespace) -> None:
     from tools.format_kb_tool import identify
     hex_text = str(args.hex_text or "").strip()
@@ -783,6 +908,18 @@ def main(argv: list[str] | None = None) -> int:
 
     p_dc = sub.add_parser("dyn_cleanup_all", help="force-remove all leftover cybergym_* containers")
     p_dc.set_defaults(func=cmd_dyn_cleanup_all)
+
+    # batch gdb debugging (Tier-1); Tier-2 MI console reserved as gdb_mi_*
+    p_gdb = sub.add_parser("gdb", help="run a batch gdb session inside a dynamic-whole container (static gdb, crash snapshot)")
+    p_gdb.add_argument("session_id")
+    p_gdb.add_argument("--program", required=True, help="target binary path inside the container, e.g. /out/foo_fuzzer")
+    p_gdb.add_argument("--args", default="", help="target args after --args (e.g. /work/inputs/poc); safe charset only")
+    p_gdb.add_argument("--script", default="", help="gdb commands (breakpoints/conditions/printf/x/...), appended verbatim; if it contains `run`, the auto crash snapshot is skipped")
+    p_gdb.add_argument("--gdb-version", default="auto", help="auto|13|8 (default auto: prefer gdb-13)")
+    p_gdb.add_argument("--timeout", type=int, default=120, help="seconds, max 600 (default 120; big debug symbols load slowly)")
+    p_gdb.add_argument("--no-snapshot", action="store_true", help="do not append the crash snapshot (bt/info registers/x/\\$rsp)")
+    p_gdb.add_argument("--purpose", default="")
+    p_gdb.set_defaults(func=cmd_gdb)
 
     # format_kb commands (general format knowledge base, 121 formats)
     p_fi = sub.add_parser("format_identify", help="identify file format from header bytes (hex)")

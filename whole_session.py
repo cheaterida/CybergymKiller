@@ -52,6 +52,15 @@ AUDIT_ROOT = PROJECT_ROOT / "logs" / "session_audit"
 # Where the model's inputs live on the host; mounted read-only at /work/inputs.
 RESEARCH_ROOT = PROJECT_ROOT / "research"
 
+# Static gdb toolchain: mounted read-only into every dynamic-whole container at
+# /opt/gdb. Binaries (tools/gdb/bin/gdb-13 / gdb-8.3) are built locally by
+# tools/gdb/fetch.sh (gitignored). The mount is skipped when the dir is absent
+# so containers still work without the toolchain; gdb_available reports it.
+GDB_TOOLS_DIR = PROJECT_ROOT / "tools" / "gdb"
+GDB_MOUNT_SRC = GDB_TOOLS_DIR
+GDB_MOUNT_DST = "/opt/gdb"
+GDB_MOUNT_SPEC = f"{GDB_MOUNT_SRC.resolve()}:/opt/gdb:ro"
+
 
 @dataclass
 class SessionInfo:
@@ -199,15 +208,19 @@ def start_session(task_id: str, *, purpose: str = "") -> dict[str, Any]:
 
     session_id = f"dyn_{int(time.time() * 1000)}"
     # One-shot container: no --rm (we manage cleanup explicitly).
+    gdb_mounted = GDB_MOUNT_SRC.is_dir()
+    volumes = [f"{inputs_dir.resolve()}:/work/inputs:ro"]
+    if gdb_mounted:
+        # Static gdb toolchain (ro), mounted alongside the inputs volume.
+        volumes.append(GDB_MOUNT_SPEC)
     create_cmd = [
         "docker", "create",
         "--network", "none",
         "--name", f"cybergym_{safe_task}_{session_id}",
-        "--volume", f"{inputs_dir.resolve()}:/work/inputs:ro",
-        "--workdir", "/work",
-        image,
-        "sleep", "infinity",
     ]
+    for volume in volumes:
+        create_cmd += ["--volume", volume]
+    create_cmd += ["--workdir", "/work", image, "sleep", "infinity"]
     proc = _run(create_cmd, timeout=60)
     if proc.returncode != 0:
         _fail(f"docker create failed: {(proc.stderr or '')[:500]}")
@@ -246,6 +259,14 @@ def start_session(task_id: str, *, purpose: str = "") -> dict[str, Any]:
         "sanitation_audit": audit,
         "work": "/work",
         "inputs_mount": f"{inputs_dir} (ro) -> /work/inputs",
+        "gdb_available": gdb_mounted,
+        "gdb_bin": f"{GDB_MOUNT_DST}/bin" if gdb_mounted else None,
+        "gdb_note": (
+            "static gdb mounted at /opt/gdb (gdb-13 for new/clang18 binaries, "
+            "gdb-8.3 for old environments); use via cybergym_gdb"
+            if gdb_mounted
+            else "static gdb not mounted (tools/gdb missing; run tools/gdb/fetch.sh)"
+        ),
     }
 
 

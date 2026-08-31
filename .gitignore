@@ -38,3 +38,7 @@ docs/*
 
 # JS deps (opencode plugin toolchain)
 .opencode/node_modules/
+
+# Static gdb binaries (built locally; download script + README are tracked)
+tools/gdb/bin/
+tools/gdb/build/

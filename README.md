@@ -14,7 +14,7 @@
 opencode run（headless，每任务独立会话）
   │  AGENTS.md（任务判据 / 工具 / 工作区 / 隔离 / 认知引导）
   ▼
-.opencode/tools/*.ts（12 个自定义工具，@opencode-ai/plugin）
+.opencode/tools/*.ts（13 个自定义工具，@opencode-ai/plugin）
   │  调用
   ▼
 opencode_bridge.py（thin CLI：无推理逻辑，仅封装确定性能力）
@@ -35,13 +35,14 @@ opencode_bridge.py（thin CLI：无推理逻辑，仅封装确定性能力）
 - **网络隔离**：批量求解全程离线（`~/netlock.sh`），仅蒸馏阶段临时放行
   （`~/netunlock.sh`）。
 
-## 自定义工具（12 个）
+## 自定义工具（13 个）
 
 | 工具 | 用途 |
 |---|---|
 | `cybergym_experiment` | 在 vul 侧二进制上运行候选输入（快速反馈，不提交） |
 | `cybergym_experiment_fix` | 在 fix 侧二进制上运行候选输入；**只暴露 fix 侧退出码**（+mode/timed_out），无 sanitizer/stderr/signal 等任何可能形成差分观察的细节 |
 | `cybergym_dyn_start` / `dyn_exec` / `dyn_stop` | 启动/执行/停止动态容器（真实源码、编译、调试） |
+| `cybergym_gdb` | 在 dyn 容器内批量 gdb 调试（静态 gdb 挂载于 /opt/gdb，崩溃现场快照：bt/寄存器/内存） |
 | `cybergym_submit` | 最终判定（submit-vul + submit-fix），唯一成功标准 |
 | `cybergym_finalize` | 归档结果 + PoC，清理工作区 |
 | `cybergym_format_identify` / `format_blueprint` / `format_template` | 格式识别 / 构造蓝图 / 模板字节 |
