@@ -34,6 +34,38 @@ if [ "$task_success" = "1" ]; then
   exit 0
 fi
 
+# 模型已主动调用 cybergym_finalize = 任务流程正常走完（无论成败）——不是
+# 异常中断 / 卡死 / 提前放弃，重试只会重复一遍已完成的分析，徒增成本。
+# 典型场景：模型走完 submit→reflect→finalize 但未 solve，opencode 以 RC=1
+# 退出（而非 0），旧逻辑会把它误判为 A 类"异常提前退出"而重试。
+model_finalized=$(python3 -c "
+import json
+path = '$SESSION'
+try:
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            if r.get('type') == 'tool_use':
+                part = r.get('part', {})
+                if part.get('tool') == 'cybergym_finalize':
+                    print(1)
+                    break
+        else:
+            print(0)
+except Exception:
+    print(0)
+" 2>/dev/null || echo 0)
+if [ "$model_finalized" = "1" ]; then
+  echo 0
+  exit 0
+fi
+
 # 会话最后活动的相对时间（秒）= session.jsonl 最后一个事件 - 首个事件。
 # opencode 在 LLM 流式请求挂起期间不写任何日志，所以卡死会话的最后事件
 # 远早于预算结束；正常干满到超时的会话最后事件接近预算终点。该值即"实际
