@@ -117,6 +117,28 @@ else
   mapfile -t TASKS < <(python3 -c "import json,sys; print('\n'.join(json.load(open('$TASKS_FILE'))))")
 fi
 
+# Archive isolation: move historical (non-batch) records out of the shared
+# logs/archive before any task runs, so (a) the model cannot see a previously
+# solved result and falsely conclude the task is already done, and (b) the
+# shared archive holds only this batch's records. Historical records are
+# preserved in <batch>/sealed_archive/ (each batch also snapshots its own
+# records to <batch>/archive at the end). stats additionally filters by the
+# batch task list, so stats.json is truthful for this round either way.
+if [ -d logs/archive ] && [ -n "$(ls -A logs/archive 2>/dev/null)" ]; then
+  mkdir -p "$LOG_ROOT_ABS/sealed_archive"
+  _safe_tasks=""
+  for t in "${TASKS[@]}"; do _safe_tasks="$_safe_tasks ${t//:/_}"; done
+  _sealed=0
+  for _d in logs/archive/*/; do
+    [ -d "$_d" ] || continue
+    _name="$(basename "$_d")"
+    if [[ " $_safe_tasks " != *" $_name "* ]]; then
+      mv "$_d" "$LOG_ROOT_ABS/sealed_archive/$_name" 2>/dev/null && _sealed=$((_sealed + 1))
+    fi
+  done
+  echo "  -> sealed $_sealed non-batch archive records into $LOG_ROOT_ABS/sealed_archive/"
+fi
+
 run_one() {
   local TASK="$1"
   local SAFE="${TASK//:/_}"
@@ -297,7 +319,11 @@ printf '%s\n' "${TASKS[@]}" | xargs -P "$MAX_WORKERS" -I{} bash -c 'run_one "$@"
 
 echo ""
 echo "=== All tasks done. Aggregating stats ==="
-timeout 60 python3 opencode_bridge.py stats --root logs/archive > "$LOG_ROOT_ABS/stats.json" 2>&1
+# Batch isolation: stats count only THIS batch's tasks, so historical records
+# left in the shared logs/archive from earlier batches never leak into
+# stats.json (success_rate is then truthful for this round).
+printf '%s\n' "${TASKS[@]}" | python3 -c "import json,sys; json.dump([l.strip() for l in sys.stdin if l.strip()], open('$LOG_ROOT_ABS/tasks.json','w'))"
+timeout 60 python3 opencode_bridge.py stats --root logs/archive --tasks "$LOG_ROOT_ABS/tasks.json" > "$LOG_ROOT_ABS/stats.json" 2>&1
 python3 -c "import json; d=json.load(open('$LOG_ROOT_ABS/stats.json')); print('total:', d.get('total'), 'solved:', d.get('solved'), 'failed:', d.get('failed'), 'rate:', d.get('success_rate'))"
 echo "Full stats: $LOG_ROOT_ABS/stats.json"
 echo "Progress:   $LOG_ROOT_ABS/progress.tsv"

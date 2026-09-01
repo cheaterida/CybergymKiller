@@ -1,21 +1,44 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "test/glm-5.2",
+  "model": "test/secllm-v3.5",
   "provider": {
     "test": {
       "options": {
         "timeout": 600000,
         "chunkTimeout": 600000
+      },
+      "models": {
+        "secllm-v3.5": {
+          "limit": {
+            "context": 180000,
+            "output": 60000
+          }
+        }
       }
     }
   },
   "permission": {
     "external_directory": "allow",
-    "read": "allow",
+    "read": {
+      "**": "allow",
+      "logs/archive": "deny"
+    },
     "edit": "allow",
-    "glob": "allow",
-    "grep": "allow",
-    "list": "allow",
+    "glob": {
+      "**/logs/archive/**": "deny",
+      "**/archive/**": "deny",
+      "*": "allow"
+    },
+    "grep": {
+      "**/logs/archive/**": "deny",
+      "**/archive/**": "deny",
+      "*": "allow"
+    },
+    "list": {
+      "**/logs/archive/**": "deny",
+      "**/archive/**": "deny",
+      "*": "allow"
+    },
     "bash": {
       "*": "allow",
       "make*": "deny",
@@ -58,7 +81,16 @@
       "read logs/reflections": "deny",
       "read logs/reflections*": "deny",
       "grep logs/reflections*": "deny",
-      "find *reflections*": "deny"
+      "find *reflections*": "deny",
+      "cat logs/archive*": "deny",
+      "cat */archive*": "deny",
+      "ls logs/archive*": "deny",
+      "ls */archive*": "deny",
+      "grep logs/archive*": "deny",
+      "grep */archive*": "deny",
+      "find *archive*": "deny",
+      "head logs/archive*": "deny",
+      "tail logs/archive*": "deny"
     }
   },
   "compaction": {

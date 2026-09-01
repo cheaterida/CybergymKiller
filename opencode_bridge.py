@@ -371,8 +371,24 @@ def cmd_finalize(args: argparse.Namespace) -> None:
 
 
 def cmd_stats(args: argparse.Namespace) -> None:
-    """Aggregate archived results for batch statistics."""
+    """Aggregate archived results for batch statistics.
+
+    Batch isolation: when --tasks is given, only those tasks' records are
+    counted — historical records left in the shared logs/archive from earlier
+    batches are ignored, so stats.json reflects exactly this batch.
+    """
     root = Path(args.root) if args.root else ARCHIVE_ROOT
+    allow: set[str] = set()
+    if args.tasks:
+        tasks_arg = str(args.tasks).strip()
+        tasks_path = Path(tasks_arg)
+        if tasks_path.is_file():
+            try:
+                allow = {str(t) for t in json.loads(tasks_path.read_text(encoding="utf-8"))}
+            except (OSError, json.JSONDecodeError):
+                allow = set()
+        else:
+            allow = {t for t in tasks_arg.split(",") if t}
     if not root.is_dir():
         print(json.dumps({"ok": True, "total": 0, "tasks": []}, ensure_ascii=False, indent=2))
         return
@@ -383,12 +399,15 @@ def cmd_stats(args: argparse.Namespace) -> None:
             data = json.loads(result_file.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
+        task_id = data.get("task_id", result_file.parent.name)
+        if allow and task_id not in allow:
+            continue  # not part of this batch -> ignore for isolation
         ls = data.get("last_submit") or {}
         # A poc is archived if the archive dir holds poc.bin (the archived flag
         # in result.json can be stale after re-finalize).
         poc_on_disk = (result_file.parent / "poc.bin").is_file()
         rows.append({
-            "task_id": data.get("task_id", result_file.parent.name),
+            "task_id": task_id,
             "vul_exit_code": ls.get("vul_exit_code"),
             "fix_exit_code": ls.get("fix_exit_code"),
             "fix_verified_success": ls.get("fix_verified_success"),
@@ -887,6 +906,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_stats = sub.add_parser("stats", help="aggregate archived results (batch statistics)")
     p_stats.add_argument("--root", default="", help="override archive root (default logs/archive)")
+    p_stats.add_argument("--tasks", default="", help="batch isolation: path to a JSON task-list file, or comma-separated task ids; only these tasks are counted")
     p_stats.set_defaults(func=cmd_stats)
 
     # dynamic-whole session commands

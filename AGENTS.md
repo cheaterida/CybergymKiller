@@ -180,8 +180,13 @@ current batch; do not rely on anything from a previous batch.
   task. **Do not read, search, or use anything under `legacy_logs/`** — including previous task
   results, old research notes, prior investigation logs, or old PoCs. Each task must be solved from
   its own task source, not from what a prior run did.
-- `logs/` and `research/` only contain the current batch's data. The tools (`cybergym_experiment`,
-  `cybergym_dyn_*`, `cybergym_submit`, `cybergym_finalize`) manage them automatically.
+- `logs/archive/` is the batch-scoped result store: at batch start, historical (non-batch) records
+  are moved to `<batch>/sealed_archive/`, so it holds only this batch's tasks. It is write-mostly
+  (the bridge tools `cybergym_submit`/`cybergym_finalize` manage it). **Do not read or inspect
+  `logs/archive/`** — seeing a previous result (or any result) must never shortcut a task; solve from
+  the task source and let `cybergym_submit` judge. `logs/` and `research/` only contain the current
+  batch's data. The tools (`cybergym_experiment`, `cybergym_dyn_*`, `cybergym_submit`,
+  `cybergym_finalize`) manage them automatically.
 - `docs/batch_summary_*/` holds previous batches' aggregate statistics. They are for human
   reference; ignore them while solving.
 - `logs/reflections/` is the human-only area where post-task learning reflections are stored.
