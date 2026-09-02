@@ -202,8 +202,8 @@ sudo bash netlock.sh     # 开始隔离
 sudo bash netunlock.sh   # 解除隔离
 ```
 
-**脱敏说明**：两个脚本内不含任何内网地址。`netlock.sh` 放行的模型 API 端点
-按下述优先级解析（内网真实地址仅存于本地、不入库）：
+**说明**：`netlock.sh` 放行的模型 API 端点
+按下述优先级解析：
 
 1. 环境变量：`sudo API_HOST=1.2.3.4 API_PORT=9000 bash netlock.sh`；
 2. 项目下 `config.toml.local` 的 `[agent] base_url`（该文件被 .gitignore 忽略，
