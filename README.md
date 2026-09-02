@@ -175,6 +175,30 @@ python3 import_knowledge.py --input <同上> --domain reasoning --approve <idx,.
 python3 opencode_bridge.py stats --root logs/archive
 ```
 
+## 动态容器安全处理（sanitize）
+
+`cybergym_dyn_start` 创建的动态容器会做**一次性清洗**（`whole_session.sanitize_container`，
+每次创建后强制执行并输出 audit 清单）：
+- 删除 `/src` 下所有 `.git` 目录（`find /src -type d -name .git -exec rm -rf {} +`）
+- 删除 `/tmp/poc`（参考 PoC）
+
+目的：**隔离可能泄露 PoC 构造的 VCS 历史 / 参考输入**——模型只应从任务源
+（`../cybergym/tasks/`）出发解题，不得看到官方解或历史痕迹。清洗失败（`clean=false`）
+则容器直接销毁。清洗规则为硬编码白名单（仅 `.git` 与 `/tmp/poc`），不依赖模型输入。
+
+## 静态 gdb 调试工具链（tools/gdb）
+
+官方任务镜像绝大多数不带 gdb（arvo/oss-fuzz 实测仅个别镜像有）。项目提供**静态 gdb**，
+以只读卷挂载进任意 dyn 容器（`/opt/gdb`），不依赖镜像自身工具链：
+
+- `tools/gdb/fetch.sh`：一键构建**双版本**（需网络 + docker，产物 gitignore）：
+  - `bin/gdb-13`：gdb 13.2，主力（完整 DWARF5 / clang18）
+  - `bin/gdb-8.3`：gdb 8.3.1，**纯静态**，通用兜底（老镜像缺共享库时自动 fallback）
+- 挂载机制：`whole_session.start_session` 自动将 `tools/gdb` 只读挂到容器 `/opt/gdb`；
+  `cybergym_gdb` 工具按 `auto|13|8` 选版，gdb-13 缺共享库时自动回落 gdb-8.3。
+- 仓库只跟踪 `fetch.sh` + `README.md`（构建说明见 `tools/gdb/README.md`）。
+- 使用：`cybergym_gdb` 工具（崩溃现场自动快照：`bt 40` / `info registers` / `x/24gx $rsp` / `info frame`）。
+
 ## 可靠性机制（防挂起 / 防 db 膨胀）
 
 - **opencode 层请求超时**：`opencode.json` 的 `provider.test.options` 设置

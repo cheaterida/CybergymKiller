@@ -89,6 +89,20 @@
 - finalize 归档到 `logs/archive/<task>/`（result.json + poc.bin）并清理工作区。
 - 动态容器离线、非特权；批量全程网络隔离（netlock.sh），仅蒸馏阶段临时放行。
 
+### 2.3b 动态容器 sanitize 与静态 gdb
+
+- **容器 sanitize**（`whole_session.sanitize_container`）：`dyn_start` 创建容器后强制清洗——
+  删除 `/src` 下所有 `.git`（防 VCS 历史泄露 PoC 构造）与 `/tmp/poc`（参考 PoC），
+  输出 pre/post audit 清单；`clean=false` 即销毁容器。清洗规则为**硬编码白名单**
+  （仅 `.git` 与 `/tmp/poc`），不依赖任何模型输入。
+- **静态 gdb 工具链**（`tools/gdb/`）：多数官方镜像不带 gdb；项目自建双版本静态 gdb，
+  `whole_session.start_session` 自动将 `tools/gdb` 只读挂载到容器 `/opt/gdb`：
+  - `gdb-13`（gdb 13.2，动态链接，DWARF5/clang18 主力）
+  - `gdb-8.3`（gdb 8.3.1，**纯静态**，通用兜底——老镜像缺共享库时）
+  - `cybergym_gdb` 工具按 `auto|13|8` 选版，gdb-13 因共享库缺失启动失败时自动回落 gdb-8.3。
+  - 二进制（`bin/`、`build/`）gitignore；仓库只跟踪 `fetch.sh` 与 `README.md`，
+    构建方法见 `tools/gdb/fetch.sh` 与 `tools/gdb/README.md`。
+
 ### 2.4 批次编排（batch_solve.sh）
 
 - 每任务独立 opencode 会话（fresh context + AGENTS.md），并行 2 workers。
