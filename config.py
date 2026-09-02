@@ -66,7 +66,7 @@ def _as_bool(value, default: bool = False) -> bool:
 
 # ========== Agent 配置 ==========
 _agent = _config.get("agent", {})
-LLM_MODEL = os.getenv("LLM_MODEL", _agent.get("model", "secllm-v3.5")).strip()
+LLM_MODEL = os.getenv("LLM_MODEL", _agent.get("model", "test/glm-5.2")).strip()
 LLM_BASE_URL = os.getenv("LLM_BASE_URL", _agent.get("base_url", "http://localhost:8000/v1")).strip()
 # api_key 从 config.toml / config.toml.local 读取（local 优先，不入库）。
 LLM_API_KEY = os.getenv("LLM_API_KEY", _agent.get("api_key", "")).strip()
