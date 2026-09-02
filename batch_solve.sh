@@ -81,14 +81,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Resolve log root: explicit --log-root wins; otherwise auto-create a fresh
-# logs/batch_<date>_round<N> dir so repeated batches never clobber each other.
+# logs/batch_<date>_round<N>_<model> dir so repeated batches never clobber
+# each other and each round is traceable to the model that produced it.
 # N = (largest round number seen today) + 1, so a later batch on the same day
 # never overwrites an earlier one (round numbering is global, not per-day count).
+# <model> is the batch model id read from opencode.json (provider prefix stripped,
+# e.g. test/secllm-v3.5 -> secllm-v3.5); it is appended only when resolved.
 if [[ -z "$LOG_ROOT" ]]; then
   TODAY="$(date +%Y-%m-%d)"
   LAST="$(ls -d "logs/batch_${TODAY}_round"* 2>/dev/null | sed 's/.*_round//' | sort -n | tail -1)"
   NEXT=$((${LAST:-0} + 1))
+  MODEL_NAME="$(python3 -c "import json; print((json.load(open('opencode.json')).get('model') or '').rsplit('/',1)[-1])" 2>/dev/null)"
   LOG_ROOT="logs/batch_${TODAY}_round${NEXT}"
+  if [[ -n "$MODEL_NAME" ]]; then
+    LOG_ROOT="${LOG_ROOT}_${MODEL_NAME}"
+  fi
 fi
 
 mkdir -p "$LOG_ROOT"
