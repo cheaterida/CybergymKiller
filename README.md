@@ -32,8 +32,8 @@ opencode_bridge.py（thin CLI：无推理逻辑，仅封装确定性能力）
   `logs/archive/<task>/` 并清理工作区。
 - **fix 侧黑盒**：唯一 fix 信息是 `cybergym_submit` 返回的 `fix_exit_code` /
   `fix_verified_success`；绝不读取、推断或还原修复补丁/修复源码/参考 PoC。
-- **网络隔离**：批量求解全程离线（`~/netlock.sh`），仅蒸馏阶段临时放行
-  （`~/netunlock.sh`）。
+- **网络隔离**：批量求解全程离线（`netlock.sh`），仅蒸馏阶段临时放行
+  （`netunlock.sh`）。
 
 ## 自定义工具（13 个）
 
@@ -92,7 +92,7 @@ logs/
 
 ```bash
 # 网络应为隔离状态（公网不可达、内网模型可达）
-curl -s -m 3 https://www.google.com >/dev/null && echo "未隔离，先执行 sudo bash ~/netlock.sh" || echo "已隔离 OK"
+curl -s -m 3 https://www.google.com >/dev/null && echo "未隔离，先执行 sudo bash netlock.sh" || echo "已隔离 OK"
 # 内网模型可达性检查（模型 API 地址在 config.toml.local，真实地址自行配置）
 curl -s -m 5 "${MODEL_API_BASE:-http://127.0.0.1:8080}/v1/models" >/dev/null && echo "内网模型可达" || echo "模型不可达！"
 ```
@@ -101,7 +101,7 @@ curl -s -m 5 "${MODEL_API_BASE:-http://127.0.0.1:8080}/v1/models" >/dev/null && 
 
 ```bash
 # 1. 确认隔离（不确定就执行；已隔离可跳过）
-sudo bash ~/netlock.sh
+sudo bash netlock.sh
 
 # 2. 启动批量 + 蒸馏编排（自动建 logs/batch_<今天>_round<N>）
 cd ~/CybergymKiller
@@ -117,7 +117,7 @@ bash run_batch_distill.sh
 批量结束后脚本会暂停并提示启用网络。**另开终端 B**：
 
 ```bash
-sudo bash ~/netunlock.sh
+sudo bash netunlock.sh
 ```
 
 回到终端 A 按 **Enter**，蒸馏自动执行：
@@ -148,7 +148,7 @@ python3 import_knowledge.py --input $DRAFT --domain reasoning --approve-all
 ### 收尾：恢复隔离
 
 ```bash
-sudo bash ~/netlock.sh
+sudo bash netlock.sh
 ```
 
 ## 使用
@@ -187,6 +187,30 @@ python3 opencode_bridge.py stats --root logs/archive
   正常干满超时绝不重试。
 - **db 自动清理**：`opencode_cleanup.py` 批末/启动时删除自动 session + 清 event 表
   + VACUUM，防止 opencode.db 膨胀。
+
+## 网络隔离开关（netlock / netunlock）
+
+批量求解必须在隔离态运行（仅内网模型 API + localhost:8666 可达，无公网；防模型
+自行访问外网）。仓库根目录提供两个 iptables 开关脚本（WSL 宿主执行，需 sudo）：
+
+- `netlock.sh`：阻断公网出站；放行内网模型 API、本地回环与已建立连接。
+- `netunlock.sh`：清空 OUTPUT 链并恢复默认 ACCEPT（蒸馏等需联网步骤前执行）。
+
+```bash
+cd ~/CybergymKiller
+sudo bash netlock.sh     # 开始隔离
+sudo bash netunlock.sh   # 解除隔离
+```
+
+**脱敏说明**：两个脚本内不含任何内网地址。`netlock.sh` 放行的模型 API 端点
+按下述优先级解析（内网真实地址仅存于本地、不入库）：
+
+1. 环境变量：`sudo API_HOST=1.2.3.4 API_PORT=9000 bash netlock.sh`；
+2. 项目下 `config.toml.local` 的 `[agent] base_url`（该文件被 .gitignore 忽略，
+   真实内网地址/密钥只写在这里，本仓库不含任何内网端点）。
+
+自定义根目录可用 `sudo bash netlock.sh --root /path/to/project`。执行前后可用
+`curl -s -m 3 https://www.google.com >/dev/null` 快速探测：有响应 = 未隔离。
 
 ## 配置
 
