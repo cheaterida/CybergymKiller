@@ -10,7 +10,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import time
@@ -550,16 +549,20 @@ def resolve_runner_spec(task_id: str, *, data_root: Path = DEFAULT_DATA_ROOT, al
         raise DynamicExperimentError(f"{mode} runner data missing for {task_id}: {missing}")
 
     if family == "arvo":
-        volumes = (
+        # Mirror the official server's run_container_binary mounts: the wrapper
+        # script, the libs dir, and each /out file are bind-mounted individually.
+        # /out is never mounted as a whole host dir, so it stays the image's own
+        # (writable) directory and OSS-Fuzz wrappers may create files under it.
+        volumes = [
             (base / "arvo", "/arvo"),
             (base / "libs", "/out-libs"),
-            (base / "out", "/out"),
-        )
+        ]
+        volumes.extend((f, f"/out/{f.name}") for f in sorted((base / "out").iterdir()))
         command = ("env", "LD_LIBRARY_PATH=/out-libs", "/bin/bash", "/arvo")
         input_mount = "/tmp/poc"
     else:
         target = _oss_fuzz_target(base)
-        volumes = ((base / "out", "/out"),)
+        volumes = [(f, f"/out/{f.name}") for f in sorted((base / "out").iterdir())]
         command = ("reproduce", target)
         input_mount = "/testcase"
     return RunnerSpec(
@@ -570,8 +573,8 @@ def resolve_runner_spec(task_id: str, *, data_root: Path = DEFAULT_DATA_ROOT, al
         image=DEFAULT_RUNNER_IMAGE,
         command=command,
         input_mount=input_mount,
-        volumes=volumes,
-        writable_out=family != "arvo",
+        volumes=tuple(volumes),
+        writable_out=False,
     )
 
 
@@ -606,29 +609,32 @@ def _bounded_text(value: bytes, limit: int) -> bytes:
     return value[:max(0, limit)]
 
 
-def build_docker_command(spec: RunnerSpec, input_path: Path, *, run_timeout: int = DEFAULT_RUN_TIMEOUT, writable_out_dir: Path | None = None) -> list[str]:
+def build_docker_command(spec: RunnerSpec, input_path: Path, *, run_timeout: int = DEFAULT_RUN_TIMEOUT) -> list[str]:
     """Build a fixed Docker CLI command; caller cannot provide Docker options.
 
-    `writable_out_dir` replaces the read-only `/out` mount with a writable copy
-    (OSS-Fuzz wrappers create a working dir under `/out`); the original task
-    data is never made writable.
+    Mirrors the official server's run_container_binary runner as closely as the
+    local sandbox allows: every volume (including each /out file) is mounted
+    read-only, so /out remains the image's own directory. All mounts are :ro so
+    the original task data is never writable.
 
-    Hardening (M-05 audit): cap-drop ALL, no-new-privileges, pids/mem/cpu
-    limits. `--user 65534` is deliberately NOT set: OSS-Fuzz wrappers write to
-    the writable `/out` copy, which a nobody user cannot; adding it would break
-    experiments. Revisit if a per-run workdir with 777 perms is provided.
+    Sandbox hardening (M-05 audit) adds cap-drop/no-new-privileges/pids/mem/cpu
+    limits on top of the server's config; these constrain worst-case resource
+    use for the offline model-facing tool. `seccomp=unconfined` is REQUIRED to
+    match the official server's runner: under the default Docker seccomp policy
+    MSan-instrumented targets behave non-deterministically (intermittent fake
+    crashes on the fix build), while with unconfined seccomp they reproduce the
+    server's deterministic verdict. cap-drop ALL + no-new-privileges still
+    prevent privilege escalation.
     """
     command = ["docker", "run", "--rm", "--network", "none",
                "--cap-drop", "ALL",
+               "--security-opt", "seccomp=unconfined",
                "--security-opt", "no-new-privileges",
                "--pids-limit", "256",
                "--memory", "2g",
                "--cpus", "2"]
     for host_path, container_path in spec.volumes:
-        if writable_out_dir is not None and container_path == "/out":
-            command.extend(["--volume", f"{Path(writable_out_dir).resolve()}:{container_path}"])
-        else:
-            command.extend(["--volume", f"{host_path.resolve()}:{container_path}:ro"])
+        command.extend(["--volume", f"{host_path.resolve()}:{container_path}:ro"])
     command.extend(["--volume", f"{input_path.resolve()}:{spec.input_mount}:ro"])
     command.extend([spec.image, "timeout", "-s", "SIGKILL", str(run_timeout), *spec.command])
     return command
@@ -689,11 +695,7 @@ def run_vulnerable_experiment(
         archived_input = experiment_dir / "input.bin"
         archived_input.write_bytes(data)
         result.input_ref = str(archived_input)
-        writable_out_dir: Path | None = None
-        if getattr(spec, "writable_out", False):
-            writable_out_dir = experiment_dir / "out_stage"
-            shutil.copytree(spec.data_dir / "out", writable_out_dir, dirs_exist_ok=True)
-        command = build_docker_command(spec, archived_input, run_timeout=run_timeout, writable_out_dir=writable_out_dir)
+        command = build_docker_command(spec, archived_input, run_timeout=run_timeout)
         started = time.monotonic()
         try:
             completed = runner(
